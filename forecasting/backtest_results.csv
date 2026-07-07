@@ -1,0 +1,6 @@
+store_id,item_id,prophet_mae,prophet_mape,naive_mae,naive_mape
+store_2,item_20,5.9,10.7,10.4,19.3
+store_35,item_20,6.9,12.7,10.3,19.9
+store_12,item_20,5.6,10.9,9.5,17.9
+store_34,item_20,5.4,9.9,9.2,17.1
+store_12,item_1,6.0,11.6,8.8,16.8
