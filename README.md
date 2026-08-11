@@ -6,6 +6,8 @@
 ![Tool](https://img.shields.io/badge/Tool-Power_BI-yellow)
 ![Domain](https://img.shields.io/badge/Domain-Retail-lightgrey)
 ![Status](https://img.shields.io/badge/Status-Complete-brightgreen)
+![CI](https://github.com/Kingsley-Eboh/retail-demand-forecasting-azure/actions/workflows/ci.yml/badge.svg)
+![Deploy](https://github.com/Kingsley-Eboh/retail-demand-forecasting-azure/actions/workflows/deploy.yml/badge.svg)
 
 ---
 
@@ -55,6 +57,7 @@ Retailers lose money in two directions at once, overstocking ties up capital and
 | pymssql / pyodbc | Python to Azure SQL Database connection |
 | SQLAlchemy | Database read and write operations |
 | dbt | Transformation logic, version controlled and documented |
+| GitHub Actions | CI/CD automation: linting and dbt tests on every push, dbt run on merge to main |
 | Power BI Desktop | Interactive dashboard |
 
 ---
@@ -71,7 +74,7 @@ Monthly revenue shows a consistent, recurring dip every September, holding in 4 
 Five SKU-store combinations account for the highest unit volumes in the dataset, all connected to a single high-demand item, item_20, sold across four different stores, alongside one additional high-volume item at a fifth store. These combinations were identified independently through both a standalone Python analysis and the Power BI dashboard, producing matching results, and represent the SKUs carrying the greatest stockout risk and therefore the tightest case for elevated safety stock and reorder review frequency.
 
 ### dbt Cloud Constraint and Engineering Judgment
-dbt Cloud's Synapse connector produced a persistent, intermittent connection failure against Azure SQL Database at this data volume. A local dbt Core attempt was also blocked, by a genuine dependency conflict between Python 3.14 and one of dbt's packages. Rather than force either path, the transformation logic was kept fully version controlled as dbt models in the repository, and executed directly against the warehouse as SQL views to keep the project moving without compromising correctness or auditability.
+dbt Cloud's Synapse connector produced a persistent, intermittent connection failure against Azure SQL Database at this data volume. Rather than force that path, the transformation logic was kept fully version controlled as dbt models in the repository, and the project moved to running dbt directly via the CLI instead of dbt Cloud, which resolved the connection issue entirely. Local CLI validation confirmed dbt could connect and execute reliably against Azure SQL Database, and this was subsequently automated via GitHub Actions (see Continuous Integration & Deployment below).
 
 ### Forecasting Model Development
 Prophet was backtested against a naive seasonal baseline (last year's values repeated) on a 90-day holdout, across the five highest-volume SKU-store combinations. Prophet outperformed the naive baseline on every item tested, roughly halving MAPE in most cases, for example a reduction from 19.3% to 10.7% MAPE on the highest-volume combination. This validation step was treated as a gate, the forward forecast was only produced once the model had demonstrated a measurable, quantified improvement over doing nothing.
@@ -141,14 +144,27 @@ Open `dashboard/retail-demand-forecasting-dashboard.pbix` in Power BI Desktop an
 
 ---
 
+## Continuous Integration & Deployment
+This project uses GitHub Actions to automatically validate and deploy changes to the dbt models:
+
+- **CI** (`.github/workflows/ci.yml`) runs on every push and pull request: lints the Python scripts and runs 10 dbt data quality tests (not-null checks across key columns in `stg_retail_sales` and `fct_daily_sales`) against the live Azure SQL Database.
+- **CD** (`.github/workflows/deploy.yml`) runs on every push to `main`: rebuilds the dbt models (`dbt run`) and re-validates them (`dbt test`), so `main` always reflects a tested, working state of the pipeline.
+
+---
+
 ## Project Structure
 
 ```
 retail-demand-forecasting-azure/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml
+│       └── deploy.yml
 ├── models/
 │   ├── staging/stg_retail_sales.sql
-│   └── marts/fct_daily_sales.sql
-├── schema.yml
+│   ├── marts/fct_daily_sales.sql
+│   └── schema.yml
+├── dbt_project.yml
 ├── forecasting/
 │   ├── forecast.py
 │   ├── top_sellers.py
