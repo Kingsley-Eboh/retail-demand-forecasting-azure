@@ -1,0 +1,58 @@
+name: Deploy dbt Models
+
+# Runs automatically when a PR is merged into main.
+# Builds the models for real (dbt run) after CI has already validated
+# the change on the pull request.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dbt
+        run: |
+          python -m pip install --upgrade pip
+          pip install --only-binary=:all: dbt-core dbt-sqlserver
+
+      - name: Install ODBC driver for Azure SQL (Ubuntu 24.04)
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /usr/share/keyrings/microsoft-prod.gpg > /dev/null
+          curl https://packages.microsoft.com/config/ubuntu/24.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
+
+      - name: Configure dbt profile
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << EOF
+          default:
+            target: dev
+            outputs:
+              dev:
+                type: sqlserver
+                driver: "ODBC Driver 18 for SQL Server"
+                server: "${{ secrets.AZURE_SQL_SERVER }}"
+                port: 1433
+                database: "${{ secrets.AZURE_SQL_DATABASE }}"
+                schema: dbo
+                authentication: sql
+                user: "${{ secrets.AZURE_SQL_USERNAME }}"
+                password: "${{ secrets.AZURE_SQL_PASSWORD }}"
+          EOF
+
+      - name: Deploy models
+        run: |
+          dbt run
+          dbt test

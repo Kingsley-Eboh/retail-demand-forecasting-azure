@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: stg_retail_sales
+    description: "Cleaned, typed staging layer over raw retail sales data."
+    columns:
+      - name: sale_date
+        description: "Date of sale."
+        tests:
+          - not_null
+      - name: store_id
+        description: "Store identifier."
+        tests:
+          - not_null
+      - name: item_id
+        description: "SKU / item identifier."
+        tests:
+          - not_null
+      - name: units_sold
+        description: "Units sold, must be zero or positive."
+        tests:
+          - not_null
+      - name: revenue
+        description: "Calculated revenue for the row."
+        tests:
+          - not_null
+
+  - name: fct_daily_sales
+    description: "Daily aggregated sales fact table, grouped by store, item, and date."
+    columns:
+      - name: sale_date
+        tests:
+          - not_null
+      - name: store_id
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: total_units_sold
+        tests:
+          - not_null
+      - name: total_revenue
+        tests:
+          - not_null

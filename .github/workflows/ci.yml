@@ -1,0 +1,63 @@
+name: CI
+
+# Runs on every push and every pull request targeting main.
+# Lints the Python scripts and runs dbt tests against the real database
+# (this project has a single schema, so CI validates against the same
+# database as production - there is no separate staging environment).
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --only-binary=:all: dbt-core dbt-sqlserver flake8
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Lint Python scripts
+        run: flake8 forecasting/ --max-line-length=120 --extend-ignore=E203
+
+      - name: Install ODBC driver for Azure SQL (Ubuntu 24.04)
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /usr/share/keyrings/microsoft-prod.gpg > /dev/null
+          curl https://packages.microsoft.com/config/ubuntu/24.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
+
+      - name: Configure dbt profile
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << EOF
+          default:
+            target: dev
+            outputs:
+              dev:
+                type: sqlserver
+                driver: "ODBC Driver 18 for SQL Server"
+                server: "${{ secrets.AZURE_SQL_SERVER }}"
+                port: 1433
+                database: "${{ secrets.AZURE_SQL_DATABASE }}"
+                schema: dbo
+                authentication: sql
+                user: "${{ secrets.AZURE_SQL_USERNAME }}"
+                password: "${{ secrets.AZURE_SQL_PASSWORD }}"
+          EOF
+
+      - name: Run dbt tests
+        run: dbt test
